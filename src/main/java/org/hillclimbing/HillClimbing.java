@@ -49,7 +49,7 @@ final class HillClimbing {
   // Emulate out/int* parameter
   public int pNewSampleInterval;
 
-  HillClimbing() {
+  HillClimbing(Random random) {
     m_wavePeriod = 4;
     m_maxThreadWaveMagnitude = 20;
     m_threadMagnitudeMultiplier = 100 / 100.0;
@@ -78,7 +78,7 @@ final class HillClimbing {
     // seed our random number generator with the CLR instance ID and the process ID, to avoid correlations with other CLR ThreadPool
     // instances.
 //    m_randomIntervalGenerator.Init(((int) 1 << 16) ^ (int) GetCurrentProcessId());
-    m_randomIntervalGenerator = new Random();
+    m_randomIntervalGenerator = random;
     m_currentSampleInterval = m_sampleIntervalLow + m_randomIntervalGenerator.nextInt(m_sampleIntervalHigh + 1);
   }
 
@@ -93,8 +93,9 @@ final class HillClimbing {
   void changeThreadsCount(int newThreadCount, HillClimbingStateTransition transition) {
     m_lastThreadCount = newThreadCount;
     m_currentSampleInterval = m_sampleIntervalLow + m_randomIntervalGenerator.nextInt(m_sampleIntervalHigh + 1);
-//    double throughput = (m_elapsedSinceLastChange > 0) ? (m_completionsSinceLastChange / m_elapsedSinceLastChange) : 0;
-//    m_options.FireEtwThreadPoolWorkerThreadAdjustmentAdjustment(newThreadCount, throughput, transition);
+    // TODO: report here
+    // double throughput = (m_elapsedSinceLastChange > 0) ? (m_completionsSinceLastChange / m_elapsedSinceLastChange) : 0;
+    //  m_options.FireEtwThreadPoolWorkerThreadAdjustmentAdjustment(newThreadCount, throughput, transition);
     m_elapsedSinceLastChange = 0;
     m_completionsSinceLastChange = 0;
   }
