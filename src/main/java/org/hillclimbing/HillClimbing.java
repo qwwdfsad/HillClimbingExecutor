@@ -13,106 +13,73 @@ import static org.hillclimbing.Complex.real;
 final class HillClimbing {
 
   private static final double PI = 3.141592653589793;
-  private static final int CPU_UTILIZATION_THRESHOLD = 95;
-  private static final int MIN_THREADS_COUNT = 2;
-  private static final int MAX_THREADS_COUNT = 200;
 
+  private final HillClimbingOptions options;
 
-  private final int m_wavePeriod;
-  private final int m_samplesToMeasure;
-  private final double m_targetThroughputRatio;
-  private final double m_targetSignalToNoiseRatio;
-  private final int m_maxChangePerSecond;
-  private final int m_maxChangePerSample;
-  private final int m_maxThreadWaveMagnitude;
-  // Both are uint actually
-  private final int m_sampleIntervalLow;
-  private final int m_sampleIntervalHigh;
-  private final double m_threadMagnitudeMultiplier;
-  private final double m_throughputErrorSmoothingFactor;
-  private final double m_gainExponent;
-  private final double m_maxSampleError;
-  private final double[] m_samples;
-  private final double[] m_threadCounts;
-  private final Random m_randomIntervalGenerator;
-  private double m_currentControlSetting;
-  private long m_totalSamples;  // longlong actually
-  private int m_lastThreadCount;
-  // seconds in double
-  private double m_elapsedSinceLastChange;
-  private double m_completionsSinceLastChange;
-  private double m_averageThroughputNoise;
-  private int m_currentSampleInterval; // uint
-  private int m_accumulatedCompletionCount;
-  private double m_accumulatedSampleDuration; // again seconds in double
+  private final double[] samples;
+  private final double[] threadCounts;
+  private final Random randomIntervalGenerator;
 
   // Emulate out/int* parameter
   public int pNewSampleInterval;
+  private double currentControlSetting;
+  private long totalSamples;
+  private int lastThreadCount;
+  // seconds in double
+  private double elapsedSinceLastChange;
+  private double completionsSinceLastChange;
+  private double averageThroughputNoise;
+  private int currentSampleInterval;
+  private int accumulatedCompletionCount;
+  private double accumulatedSampleDuration;
 
-  HillClimbing(Random random) {
-    m_wavePeriod = 4;
-    m_maxThreadWaveMagnitude = 20;
-    m_threadMagnitudeMultiplier = 100 / 100.0;
-    m_samplesToMeasure = m_wavePeriod * 8;
-    m_targetThroughputRatio = 15 / 100.0;
-    m_targetSignalToNoiseRatio = 300 / 100.0;
-    m_maxChangePerSecond = 4;
-    m_maxChangePerSample = 20;
-    m_sampleIntervalLow = 10;
-    m_sampleIntervalHigh = 200;
-    m_throughputErrorSmoothingFactor = 1 / 100.0;
-    m_gainExponent = 200 / 100.0;
-    m_maxSampleError = 15 / 100.0;
-    m_currentControlSetting = 0;
-    m_totalSamples = 0;
-    m_lastThreadCount = 0;
-    m_averageThroughputNoise = 0;
-    m_elapsedSinceLastChange = 0;
-    m_completionsSinceLastChange = 0;
-    m_accumulatedCompletionCount = 0;
-    m_accumulatedSampleDuration = 0;
-
-    m_samples = new double[m_samplesToMeasure];
-    m_threadCounts = new double[m_samplesToMeasure];
-
-    // seed our random number generator with the CLR instance ID and the process ID, to avoid correlations with other CLR ThreadPool
-    // instances.
-//    m_randomIntervalGenerator.Init(((int) 1 << 16) ^ (int) GetCurrentProcessId());
-    m_randomIntervalGenerator = random;
-    m_currentSampleInterval = m_sampleIntervalLow + m_randomIntervalGenerator.nextInt(m_sampleIntervalHigh + 1);
+  HillClimbing(HillClimbingOptions options, Random random) {
+    this.options = options;
+    currentControlSetting = 0;
+    totalSamples = 0;
+    lastThreadCount = 0;
+    averageThroughputNoise = 0;
+    elapsedSinceLastChange = 0;
+    completionsSinceLastChange = 0;
+    accumulatedCompletionCount = 0;
+    accumulatedSampleDuration = 0;
+    samples = new double[options.samplesToMeasure];
+    threadCounts = new double[options.samplesToMeasure];
+    randomIntervalGenerator = random;
+    currentSampleInterval = options.sampleIntervalLow + randomIntervalGenerator.nextInt(options.sampleIntervalHigh + 1);
   }
 
 
   void forceChange(int newThreadCount, StateTransition transition) {
-    if (newThreadCount != m_lastThreadCount) {
-      m_currentControlSetting += (newThreadCount - m_lastThreadCount);
+    if (newThreadCount != lastThreadCount) {
+      currentControlSetting += (newThreadCount - lastThreadCount);
       changeThreadsCount(newThreadCount, transition);
     }
   }
 
   void changeThreadsCount(int newThreadCount, StateTransition transition) {
-    m_lastThreadCount = newThreadCount;
-    m_currentSampleInterval = m_sampleIntervalLow + m_randomIntervalGenerator.nextInt(m_sampleIntervalHigh + 1);
+    lastThreadCount = newThreadCount;
+    currentSampleInterval = options.sampleIntervalLow + randomIntervalGenerator.nextInt(options.sampleIntervalHigh + 1);
     // TODO: report here
-    // double throughput = (m_elapsedSinceLastChange > 0) ? (m_completionsSinceLastChange / m_elapsedSinceLastChange) : 0;
+    // double throughput = (elapsedSinceLastChange > 0) ? (completionsSinceLastChange / elapsedSinceLastChange) : 0;
     //  m_options.FireEtwThreadPoolWorkerThreadAdjustmentAdjustment(newThreadCount, throughput, transition);
-    m_elapsedSinceLastChange = 0;
-    m_completionsSinceLastChange = 0;
+    elapsedSinceLastChange = 0;
+    completionsSinceLastChange = 0;
   }
 
   int update(int currentThreadCount, double sampleDuration, int numCompletions) {
 
     // If someone changed the thread count without telling us, update our records accordingly.
-    if (currentThreadCount != m_lastThreadCount)
+    if (currentThreadCount != lastThreadCount)
       forceChange(currentThreadCount, StateTransition.INITIALIZING);
 
     // Update the cumulative stats for this thread count
-    m_elapsedSinceLastChange += sampleDuration;
-    m_completionsSinceLastChange += numCompletions;
+    elapsedSinceLastChange += sampleDuration;
+    completionsSinceLastChange += numCompletions;
 
     // Add in any data we've already collected about this sample
-    sampleDuration += m_accumulatedSampleDuration;
-    numCompletions += m_accumulatedCompletionCount;
+    sampleDuration += accumulatedSampleDuration;
+    numCompletions += accumulatedCompletionCount;
     // We need to make sure we're collecting reasonably accurate data.  Since we're just counting the end
     // of each work item, we are goinng to be missing some data about what really happened during the
     // sample interval.  The count produced by each thread includes an initial work item that may have
@@ -132,26 +99,26 @@ final class HillClimbing {
     // we missed in the previous samples, and so will be 33% positive.  So every three samples we'll have
     // two "low" samples and one "high" sample.  This will appear as periodic variation right in the frequency
     // range we're targeting, which will not be filtered by the frequency-domain translation.
-    if (m_totalSamples > 0 && ((currentThreadCount - 1.0) / numCompletions) >= m_maxSampleError) {
+    if (totalSamples > 0 && ((currentThreadCount - 1.0) / numCompletions) >= options.maxSampleError) {
       // not accurate enough yet.  Let's accumulate the data so far, and tell the ThreadPool
       // to collect a little more.
-      m_accumulatedSampleDuration = sampleDuration;
-      m_accumulatedCompletionCount = numCompletions;
+      accumulatedSampleDuration = sampleDuration;
+      accumulatedCompletionCount = numCompletions;
       pNewSampleInterval = 10;
       return currentThreadCount;
     }
 
     // We've got enouugh data for our sample; reset our accumulators for next time.
-    m_accumulatedSampleDuration = 0;
-    m_accumulatedCompletionCount = 0;
+    accumulatedSampleDuration = 0;
+    accumulatedCompletionCount = 0;
 
     // Add the current thread count and throughput sample to our history
     double throughput = (double) numCompletions / sampleDuration;
 
-    int sampleIndex = (int) (m_totalSamples % m_samplesToMeasure);
-    m_samples[sampleIndex] = throughput;
-    m_threadCounts[sampleIndex] = currentThreadCount;
-    m_totalSamples++;
+    int sampleIndex = (int) (totalSamples % options.samplesToMeasure);
+    samples[sampleIndex] = throughput;
+    threadCounts[sampleIndex] = currentThreadCount;
+    totalSamples++;
 
     // Set up defaults for our metrics
     Complex threadWaveComponent;
@@ -165,15 +132,15 @@ final class HillClimbing {
     // How many samples will we use?  It must be at least the three wave periods we're looking for, and it must also be a whole
     // multiple of the primary wave's period; otherwise the frequency we're looking for will fall between two  frequency bands
     // in the Fourier analysis, and we won't be able to measure it accurately.
-    int sampleCount = (int) (Math.min(m_totalSamples - 1, m_samplesToMeasure) / m_wavePeriod) * m_wavePeriod;
+    int sampleCount = (int) (Math.min(totalSamples - 1, options.samplesToMeasure) / options.wavePeriod) * options.wavePeriod;
 
-    if (sampleCount > m_wavePeriod) {
+    if (sampleCount > options.wavePeriod) {
       // Average the throughput and thread count samples, so we can scale the wave magnitudes later.
       double sampleSum = 0;
       double threadSum = 0;
       for (int i = 0; i < sampleCount; i++) {
-        sampleSum += m_samples[(int) ((m_totalSamples - sampleCount + i) % m_samplesToMeasure)];
-        threadSum += m_threadCounts[(int) ((m_totalSamples - sampleCount + i) % m_samplesToMeasure)];
+        sampleSum += samples[(int) ((totalSamples - sampleCount + i) % options.samplesToMeasure)];
+        threadSum += threadCounts[(int) ((totalSamples - sampleCount + i) % options.samplesToMeasure)];
       }
       double averageThroughput = sampleSum / sampleCount;
       double averageThreadCount = threadSum / sampleCount;
@@ -181,40 +148,38 @@ final class HillClimbing {
       if (averageThroughput > 0 && averageThreadCount > 0) {
         // Calculate the periods of the adjacent frequency bands we'll be using to measure noise levels.
         // We want the two adjacent Fourier frequency bands.
-        double adjacentPeriod1 = sampleCount / (((double) sampleCount / (double) m_wavePeriod) + 1);
-        double adjacentPeriod2 = sampleCount / (((double) sampleCount / (double) m_wavePeriod) - 1);
+        double adjacentPeriod1 = sampleCount / (((double) sampleCount / (double) options.wavePeriod) + 1);
+        double adjacentPeriod2 = sampleCount / (((double) sampleCount / (double) options.wavePeriod) - 1);
 
         // Get the the three different frequency components of the throughput (scaled by average
         // throughput).  Our "error" estimate (the amount of noise that might be present in the
         // frequency band we're really interested in) is the average of the adjacent bands.
-        throughputWaveComponent = computeWaveComponent(m_samples, sampleCount, m_wavePeriod).divideBy(averageThroughput);
-        throughputErrorEstimate = computeWaveComponent(m_samples, sampleCount, adjacentPeriod1).divideBy(averageThroughput).abs();
+        throughputWaveComponent = computeWaveComponent(samples, sampleCount, options.wavePeriod).divideBy(averageThroughput);
+        throughputErrorEstimate = computeWaveComponent(samples, sampleCount, adjacentPeriod1).divideBy(averageThroughput).abs();
 
         if (adjacentPeriod2 <= sampleCount) {
           throughputErrorEstimate = Math.max(throughputErrorEstimate,
-            computeWaveComponent(m_samples, sampleCount, adjacentPeriod2).divideBy(averageThroughput).abs());
+            computeWaveComponent(samples, sampleCount, adjacentPeriod2).divideBy(averageThroughput).abs());
         }
 
         // Do the same for the thread counts, so we have something to compare to.  We don't measure thread count
         // noise, because there is none; these are exact measurements.
-        threadWaveComponent = computeWaveComponent(m_threadCounts, sampleCount, m_wavePeriod).divideBy(averageThreadCount);
+        threadWaveComponent = computeWaveComponent(threadCounts, sampleCount, options.wavePeriod).divideBy(averageThreadCount);
 
-        //
         // Update our moving average of the throughput noise.  We'll use this later as feedback to
         // determine the new size of the thread wave.
-        //
-        if (m_averageThroughputNoise == 0) {
-          m_averageThroughputNoise = throughputErrorEstimate;
+        if (averageThroughputNoise == 0) {
+          averageThroughputNoise = throughputErrorEstimate;
         }
         else {
-          m_averageThroughputNoise = (m_throughputErrorSmoothingFactor * throughputErrorEstimate)
-            + ((1.0 - m_throughputErrorSmoothingFactor) * m_averageThroughputNoise);
+          averageThroughputNoise = (options.throughputErrorSmoothingFactor * throughputErrorEstimate)
+            + ((1.0 - options.throughputErrorSmoothingFactor) * averageThroughputNoise);
         }
 
         if (threadWaveComponent.abs() > 0) {
           // Adjust the throughput wave so it's centered around the target wave, and then calculate the adjusted throughput/thread ratio.
           ratio = throughputWaveComponent
-            .minus(threadWaveComponent.multiplyBy(real(m_targetThroughputRatio)))
+            .minus(threadWaveComponent.multiplyBy(real(options.targetThroughputRatio)))
             .divideBy(threadWaveComponent);
           transition = StateTransition.CLIMBING_MOVE;
         }
@@ -223,13 +188,11 @@ final class HillClimbing {
           transition = StateTransition.STABILIZING;
         }
 
-        //
         // Calculate how confident we are in the ratio.  More noise == less confident.  This has
         // the effect of slowing down movements that might be affected by random noise.
-        //
-        double noiseForConfidence = Math.max(m_averageThroughputNoise, throughputErrorEstimate);
+        double noiseForConfidence = Math.max(averageThroughputNoise, throughputErrorEstimate);
         if (noiseForConfidence > 0) {
-          confidence = (threadWaveComponent.abs() / noiseForConfidence) / m_targetSignalToNoiseRatio;
+          confidence = (threadWaveComponent.abs() / noiseForConfidence) / options.targetSignalToNoiseRatio;
         }
         else {
           confidence = 1.0; //there is no noise!
@@ -251,35 +214,35 @@ final class HillClimbing {
     // Now apply non-linear gain, such that values around zero are attenuated, while higher values
     // are enhanced.  This allows us to move quickly if we're far away from the target, but more slowly
     // if we're getting close, giving us rapid ramp-up without wild oscillations around the target.
-    double gain = m_maxChangePerSecond * sampleDuration;
-    move = Math.pow(Math.abs(move), m_gainExponent) * (move >= 0.0 ? 1 : -1) * gain;
-    move = Math.min(move, m_maxChangePerSample);
+    double gain = options.maxChangePerSecond * sampleDuration;
+    move = Math.pow(Math.abs(move), options.gainExponent) * (move >= 0.0 ? 1 : -1) * gain;
+    move = Math.min(move, options.maxChangePerSample);
 
     // If the result was positive, and CPU is > 95%, refuse the move.
-    if (move > 0.0 && currentCpuUtilization() > CPU_UTILIZATION_THRESHOLD) {
+    if (move > 0.0 && currentCpuUtilization() > options.cpuUtilizationThreshold) {
       move = 0.0;
     }
 
     // Apply the move to our control setting
-    m_currentControlSetting += move;
+    currentControlSetting += move;
 
     // Calculate the new thread wave magnitude, which is based on the moving average we've been keeping of
     // the throughput error.  This average starts at zero, so we'll start with a nice safe little wave at first.
     int newThreadWaveMagnitude = (int) (0.5 +
-      (m_currentControlSetting * m_averageThroughputNoise * m_targetSignalToNoiseRatio * m_threadMagnitudeMultiplier * 2.0));
-    newThreadWaveMagnitude = Math.min(newThreadWaveMagnitude, m_maxThreadWaveMagnitude);
+      (currentControlSetting * averageThroughputNoise * options.targetSignalToNoiseRatio * options.threadMagnitudeMultiplier * 2.0));
+    newThreadWaveMagnitude = Math.min(newThreadWaveMagnitude, options.maxThreadWaveMagnitude);
     newThreadWaveMagnitude = Math.max(newThreadWaveMagnitude, 1);
 
     // Make sure our control setting is within the ThreadPool's limits
-    m_currentControlSetting = Math.min(MAX_THREADS_COUNT - newThreadWaveMagnitude, m_currentControlSetting);
-    m_currentControlSetting = Math.max(MIN_THREADS_COUNT, m_currentControlSetting);
+    currentControlSetting = Math.min(options.maxThreadsCount - newThreadWaveMagnitude, currentControlSetting);
+    currentControlSetting = Math.max(options.minThreadsCount, currentControlSetting);
 
     // Calculate the new thread count (control setting + square wave)
-    int newThreadCount = (int) (m_currentControlSetting + newThreadWaveMagnitude * ((m_totalSamples / (m_wavePeriod / 2)) % 2));
+    int newThreadCount = (int) (currentControlSetting + newThreadWaveMagnitude * ((totalSamples / (options.wavePeriod / 2)) % 2));
 
     // Make sure the new thread count doesn't exceed the ThreadPool's limits
-    newThreadCount = Math.min(MAX_THREADS_COUNT, newThreadCount);
-    newThreadCount = Math.max(MIN_THREADS_COUNT, newThreadCount);
+    newThreadCount = Math.min(options.maxThreadsCount, newThreadCount);
+    newThreadCount = Math.max(options.minThreadsCount, newThreadCount);
 
     // If all of this caused an actual change in thread count, log that as well.
     if (newThreadCount != currentThreadCount)
@@ -290,11 +253,11 @@ final class HillClimbing {
     // running in other processes.
     // If we're at minThreads, and we seem to be hurting performance by going higher, we can't go any lower to fix this.  So
     // we'll simply stay at minThreads much longer, and only occasionally try a higher value.
-    if (ratio.real < 0.0 && newThreadCount == MIN_THREADS_COUNT) {
-      pNewSampleInterval = (int) (0.5 + m_currentSampleInterval * (10.0 * Math.max(-ratio.real, 1.0)));
+    if (ratio.real < 0.0 && newThreadCount == options.minThreadsCount) {
+      pNewSampleInterval = (int) (0.5 + currentSampleInterval * (10.0 * Math.max(-ratio.real, 1.0)));
     }
     else {
-      pNewSampleInterval = m_currentSampleInterval;
+      pNewSampleInterval = currentSampleInterval;
     }
 
     return newThreadCount;
@@ -319,7 +282,7 @@ final class HillClimbing {
     double q2 = 0.0;
 
     for (int i = 0; i < sampleCount; i++) {
-      double sample = samples[(int) ((m_totalSamples - sampleCount + i) % m_samplesToMeasure)];
+      double sample = samples[(int) ((totalSamples - sampleCount + i) % options.samplesToMeasure)];
 
       q0 = coefficient * q1 - q2 + sample;
       q2 = q1;

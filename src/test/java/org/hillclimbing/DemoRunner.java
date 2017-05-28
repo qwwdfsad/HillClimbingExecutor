@@ -28,7 +28,7 @@ class DemoRunner {
     print("Running Hill Climbing algorithm");
     List<String> result = new ArrayList<>();
 
-    HillClimbing hc = new HillClimbing(random);
+    HillClimbing hc = new HillClimbing(HillClimbingOptions.builder().setMinThreadsCount(2).build(), random);
     int newMax;
     long totalCompletions = 0;
     int timer = 0;
