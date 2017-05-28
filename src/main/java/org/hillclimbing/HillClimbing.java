@@ -15,13 +15,10 @@ final class HillClimbing {
   private static final double PI = 3.141592653589793;
 
   private final HillClimbingOptions options;
-
   private final double[] samples;
   private final double[] threadCounts;
   private final Random randomIntervalGenerator;
 
-  // Emulate out/int* parameter
-  public int pNewSampleInterval;
   private double currentControlSetting;
   private long totalSamples;
   private int lastThreadCount;
@@ -32,6 +29,8 @@ final class HillClimbing {
   private int currentSampleInterval;
   private int accumulatedCompletionCount;
   private double accumulatedSampleDuration;
+  private int nextSampleInterval;
+
 
   HillClimbing(HillClimbingOptions options, Random random) {
     this.options = options;
@@ -69,64 +68,65 @@ final class HillClimbing {
 
   int update(int currentThreadCount, double sampleDuration, int numCompletions) {
 
-    // If someone changed the thread count without telling us, update our records accordingly.
-    if (currentThreadCount != lastThreadCount)
+    // If someone changed thread count without telling us, update our records accordingly.
+    if (currentThreadCount != lastThreadCount) {
       forceChange(currentThreadCount, StateTransition.INITIALIZING);
+    }
 
-    // Update the cumulative stats for this thread count
+    // Update the cumulative stats
     elapsedSinceLastChange += sampleDuration;
     completionsSinceLastChange += numCompletions;
 
     // Add in any data we've already collected about this sample
     sampleDuration += accumulatedSampleDuration;
     numCompletions += accumulatedCompletionCount;
-    // We need to make sure we're collecting reasonably accurate data.  Since we're just counting the end
-    // of each work item, we are goinng to be missing some data about what really happened during the
-    // sample interval.  The count produced by each thread includes an initial work item that may have
-    // started well before the start of the interval, and each thread may have been running some new
-    // work item for some time before the end of the interval, which did not yet get counted.  So
-    // our count is going to be off by +/- threadCount workitems.
-    //
-    // The exception is that the thread that reported to us last time definitely wasn't running any work
-    // at that time, and the thread that's reporting now definitely isn't running a work item now.  So
-    // we really only need to consider threadCount-1 threads.
-    //
-    // Thus the percent error in our count is +/- (threadCount-1)/numCompletions.
-    //
-    // We cannot rely on the frequency-domain analysis we'll be doing later to filter out this error, because
-    // of the way it accumulates over time.  If this sample is off by, say, 33% in the negative direction,
-    // then the next one likely will be too.  The one after that will include the sum of the completions
-    // we missed in the previous samples, and so will be 33% positive.  So every three samples we'll have
-    // two "low" samples and one "high" sample.  This will appear as periodic variation right in the frequency
-    // range we're targeting, which will not be filtered by the frequency-domain translation.
+
+   /*
+    * We need to make sure we're collecting reasonably accurate data.  Since we're just counting the end
+    * of each work item, we are going to be missing some data about what really happened during the
+    * sample interval. The count produced by each thread includes an initial work item that may have
+    * started well before the start of the interval, and each thread may have been running some new
+    * work item for some time before the end of the interval, which did not yet get counted.  So
+    * our count is going to be off by +/- threadCount work-items.
+    *
+    * The exception is that the thread that reported to us last time definitely wasn't running any work
+    * at that time, and the thread that's reporting now definitely isn't running a work item now.  So
+    * we really only need to consider threadCount - 1 threads.
+    *
+    * Thus the percent error in our count is +/- (threadCount - 1) / numCompletions.
+    *
+    * We cannot rely on the frequency-domain analysis we'll be doing later to filter out this error, because
+    * of the way it accumulates over time. If this sample is off by, say, 33% in the negative direction,
+    * then the next one likely will be too. The one after that will include the sum of the completions
+    * we missed in the previous samples, and so will be 33% positive.  So every three samples we'll have
+    * two "low" samples and one "high" sample. This will appear as periodic variation right in the frequency
+    * range we're targeting, which will not be filtered by the frequency-domain translation.
+    * TODO hillclimbing update in my implementation will be processed in separate thread so it's worth to revisit this math later
+    */
     if (totalSamples > 0 && ((currentThreadCount - 1.0) / numCompletions) >= options.maxSampleError) {
-      // not accurate enough yet.  Let's accumulate the data so far, and tell the ThreadPool
-      // to collect a little more.
+      // Not accurate enough yet, accumulate the data so far and do nothing
       accumulatedSampleDuration = sampleDuration;
       accumulatedCompletionCount = numCompletions;
-      pNewSampleInterval = 10;
+      nextSampleInterval = 10;
       return currentThreadCount;
     }
 
-    // We've got enouugh data for our sample; reset our accumulators for next time.
+    // We've got enough data for our sample; reset our accumulators for next time.
     accumulatedSampleDuration = 0;
     accumulatedCompletionCount = 0;
 
     // Add the current thread count and throughput sample to our history
     double throughput = (double) numCompletions / sampleDuration;
-
     int sampleIndex = (int) (totalSamples % options.samplesToMeasure);
     samples[sampleIndex] = throughput;
     threadCounts[sampleIndex] = currentThreadCount;
     totalSamples++;
 
-    // Set up defaults for our metrics
     Complex threadWaveComponent;
     Complex throughputWaveComponent;
     Complex ratio = Complex.zero();
     double throughputErrorEstimate;
     double confidence = 0.0;
-
     StateTransition transition = StateTransition.WARMUP;
 
     // How many samples will we use?  It must be at least the three wave periods we're looking for, and it must also be a whole
@@ -151,9 +151,9 @@ final class HillClimbing {
         double adjacentPeriod1 = sampleCount / (((double) sampleCount / (double) options.wavePeriod) + 1);
         double adjacentPeriod2 = sampleCount / (((double) sampleCount / (double) options.wavePeriod) - 1);
 
-        // Get the the three different frequency components of the throughput (scaled by average
-        // throughput).  Our "error" estimate (the amount of noise that might be present in the
-        // frequency band we're really interested in) is the average of the adjacent bands.
+        // Get the the three different frequency components of the throughput (scaled by average throughput).
+        // Our "error" estimate (the amount of noise that might be present
+        // in the frequency band we're really interested in) is the average of the adjacent bands.
         throughputWaveComponent = computeWaveComponent(samples, sampleCount, options.wavePeriod).divideBy(averageThroughput);
         throughputErrorEstimate = computeWaveComponent(samples, sampleCount, adjacentPeriod1).divideBy(averageThroughput).abs();
 
@@ -162,12 +162,11 @@ final class HillClimbing {
             computeWaveComponent(samples, sampleCount, adjacentPeriod2).divideBy(averageThroughput).abs());
         }
 
-        // Do the same for the thread counts, so we have something to compare to.  We don't measure thread count
-        // noise, because there is none; these are exact measurements.
+        // Do the same for the thread counts, so we have something to compare to.
+        // We don't measure thread count noise, because there is none; these are exact measurements.
         threadWaveComponent = computeWaveComponent(threadCounts, sampleCount, options.wavePeriod).divideBy(averageThreadCount);
 
-        // Update our moving average of the throughput noise.  We'll use this later as feedback to
-        // determine the new size of the thread wave.
+        // Update our moving average of the throughput noise.  We'll use this later as feedback to determine the new size of the thread wave.
         if (averageThroughputNoise == 0) {
           averageThroughputNoise = throughputErrorEstimate;
         }
@@ -188,7 +187,7 @@ final class HillClimbing {
           transition = StateTransition.STABILIZING;
         }
 
-        // Calculate how confident we are in the ratio.  More noise == less confident.  This has
+        // Calculate how confident we are in the ratio.  More noise == less confident. This has
         // the effect of slowing down movements that might be affected by random noise.
         double noiseForConfidence = Math.max(averageThroughputNoise, throughputErrorEstimate);
         if (noiseForConfidence > 0) {
@@ -200,19 +199,21 @@ final class HillClimbing {
       }
     }
 
-    // We use just the real part of the complex ratio we just calculated.  If the throughput signal
-    // is exactly in phase with the thread signal, this will be the same as taking the magnitude of
-    // the complex move and moving that far up.  If they're 180 degrees out of phase, we'll move
-    // backward (because this indicates that our changes are having the opposite of the intended effect).
-    // If they're 90 degrees out of phase, we won't move at all, because we can't tell whether we're
-    // having a negative or positive effect on throughput.
+    /*
+     * We use just the real part of the complex ratio we just calculated. If the throughput signal
+     * is exactly in phase with the thread signal, this will be the same as taking the magnitude of
+     * the complex move and moving that far up. If they're 180 degrees out of phase, we'll move
+     * backward (because this indicates that our changes are having the opposite of the intended effect).
+     * If they're 90 degrees out of phase, we won't move at all, because we can't tell whether we're
+     * having a negative or positive effect on throughput.
+    */
     double move = Math.min(1.0, Math.max(-1.0, ratio.real));
 
     // Apply our confidence multiplier.
     move *= Math.min(1.0, Math.max(0.0, confidence));
 
     // Now apply non-linear gain, such that values around zero are attenuated, while higher values
-    // are enhanced.  This allows us to move quickly if we're far away from the target, but more slowly
+    // are enhanced. This allows us to move quickly if we're far away from the target, but more slowly
     // if we're getting close, giving us rapid ramp-up without wild oscillations around the target.
     double gain = options.maxChangePerSecond * sampleDuration;
     move = Math.pow(Math.abs(move), options.gainExponent) * (move >= 0.0 ? 1 : -1) * gain;
@@ -254,13 +255,17 @@ final class HillClimbing {
     // If we're at minThreads, and we seem to be hurting performance by going higher, we can't go any lower to fix this.  So
     // we'll simply stay at minThreads much longer, and only occasionally try a higher value.
     if (ratio.real < 0.0 && newThreadCount == options.minThreadsCount) {
-      pNewSampleInterval = (int) (0.5 + currentSampleInterval * (10.0 * Math.max(-ratio.real, 1.0)));
+      nextSampleInterval = (int) (0.5 + currentSampleInterval * (10.0 * Math.max(-ratio.real, 1.0)));
     }
     else {
-      pNewSampleInterval = currentSampleInterval;
+      nextSampleInterval = currentSampleInterval;
     }
 
     return newThreadCount;
+  }
+
+  public int getNextSampleInterval() {
+    return nextSampleInterval;
   }
 
   private int currentCpuUtilization() {

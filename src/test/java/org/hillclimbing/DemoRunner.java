@@ -63,12 +63,12 @@ class DemoRunner {
           // if (elapsed * 1000.0 >= (ThreadAdjustmentInterval / 2))
           // Also 'ThreadAdjustmentInterval' is initially set to low hill-climbing sample interval
           double sampleDuration = (double) (timer - lastSampleTimer);
-          if (sampleDuration * 1000.0 >= (hc.pNewSampleInterval / 2)) {
+          if (sampleDuration * 1000.0 >= (hc.getNextSampleInterval() / 2)) {
 
             newMax = hc.update(currentThreadCount, sampleDuration, numCompletions);
 
             print("Mode=%d, Num Completions=%d (%d), New Max=%d (Old=%d), threadAdjustmentInterval=%d",
-              mode, numCompletions, totalCompletions, newMax, currentThreadCount, hc.pNewSampleInterval);
+              mode, numCompletions, totalCompletions, newMax, currentThreadCount, hc.getNextSampleInterval());
 
             if (newMax > currentThreadCount) {
               // Never go beyond what we actually need (plus 1)
@@ -96,7 +96,7 @@ class DemoRunner {
           }
           else {
             print("Sample duration is too small, current=%f, needed=%f (threadAdjustmentInterval=%d)",
-              sampleDuration, (hc.pNewSampleInterval / 2) / 1000.0, hc.pNewSampleInterval);
+              sampleDuration, (hc.getNextSampleInterval() / 2) / 1000.0, hc.getNextSampleInterval());
           }
         }
         else {

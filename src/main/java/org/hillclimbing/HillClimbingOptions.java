@@ -5,111 +5,111 @@ public final class HillClimbingOptions {
   public static final HillClimbingOptions DEFAULT_OPTIONS = builder().build();
 
   public static final class Builder {
-    private int myCpuUtilizationThreshold = 95;
-    private int myMinThreadsCount = Runtime.getRuntime().availableProcessors();
-    private int myMaxThreadsCount = 200;
-    private int myWavePeriod = 4;
-    private int mySamplesToMeasure = myWavePeriod * 8;
-    private double myTargetThroughputRatio = 15 / 100.0;
-    private double myTargetSignalToNoiseRatio = 300 / 100.0;
-    private int myMaxChangePerSecond = 4;
-    private int myMaxChangePerSample = 20;
-    private int myMaxThreadWaveMagnitude = 20;
-    private int mySampleIntervalLow = 10;
-    private int mySampleIntervalHigh = 200;
-    private double myThreadMagnitudeMultiplier = 100 / 100.0;
-    private double myThroughputErrorSmoothingFactor = 1 / 100.0;
-    private double myGainExponent = 200 / 100.0;
-    private double myMaxSampleError = 15 / 100.0;
+    private int cpuUtilizationThreshold = 95;
+    private int minThreadsCount = Runtime.getRuntime().availableProcessors();
+    private int maxThreadsCount = 200;
+    private int wavePeriod = 4;
+    private int samplesToMeasure = wavePeriod * 8;
+    private double targetThroughputRatio = 15 / 100.0;
+    private double targetSignalToNoiseRatio = 300 / 100.0;
+    private int maxChangePerSecond = 4;
+    private int maxChangePerSample = 20;
+    private int maxThreadWaveMagnitude = 20;
+    private int sampleIntervalLow = 10;
+    private int sampleIntervalHigh = 200;
+    private double threadMagnitudeMultiplier = 100 / 100.0;
+    private double throughputErrorSmoothingFactor = 1 / 100.0;
+    private double gainExponent = 200 / 100.0;
+    private double maxSampleError = 15 / 100.0;
 
     private Builder() {
     }
 
     public Builder setCpuUtilizationThreshold(int cpuUtilizationThreshold) {
-      myCpuUtilizationThreshold = cpuUtilizationThreshold;
+      this.cpuUtilizationThreshold = cpuUtilizationThreshold;
       return this;
     }
 
     public Builder setMinThreadsCount(int minThreadsCount) {
-      myMinThreadsCount = minThreadsCount;
+      this.minThreadsCount = minThreadsCount;
       return this;
     }
 
     public Builder setMaxThreadsCount(int maxThreadsCount) {
-      myMaxThreadsCount = maxThreadsCount;
+      this.maxThreadsCount = maxThreadsCount;
       return this;
     }
 
     public Builder setWavePeriod(int wavePeriod) {
-      myWavePeriod = wavePeriod;
+      this.wavePeriod = wavePeriod;
       return this;
     }
 
     public Builder setSamplesToMeasure(int samplesToMeasure) {
-      mySamplesToMeasure = samplesToMeasure;
+      this.samplesToMeasure = samplesToMeasure;
       return this;
     }
 
     public Builder setTargetThroughputRatio(double targetThroughputRatio) {
-      myTargetThroughputRatio = targetThroughputRatio;
+      this.targetThroughputRatio = targetThroughputRatio;
       return this;
     }
 
     public Builder setTargetSignalToNoiseRatio(double targetSignalToNoiseRatio) {
-      myTargetSignalToNoiseRatio = targetSignalToNoiseRatio;
+      this.targetSignalToNoiseRatio = targetSignalToNoiseRatio;
       return this;
     }
 
     public Builder setMaxChangePerSecond(int maxChangePerSecond) {
-      myMaxChangePerSecond = maxChangePerSecond;
+      this.maxChangePerSecond = maxChangePerSecond;
       return this;
     }
 
     public Builder setMaxChangePerSample(int maxChangePerSample) {
-      myMaxChangePerSample = maxChangePerSample;
+      this.maxChangePerSample = maxChangePerSample;
       return this;
     }
 
     public Builder setMaxThreadWaveMagnitude(int maxThreadWaveMagnitude) {
-      myMaxThreadWaveMagnitude = maxThreadWaveMagnitude;
+      this.maxThreadWaveMagnitude = maxThreadWaveMagnitude;
       return this;
     }
 
     public Builder setSampleIntervalLow(int sampleIntervalLow) {
-      mySampleIntervalLow = sampleIntervalLow;
+      this.sampleIntervalLow = sampleIntervalLow;
       return this;
     }
 
     public Builder setSampleIntervalHigh(int sampleIntervalHigh) {
-      mySampleIntervalHigh = sampleIntervalHigh;
+      this.sampleIntervalHigh = sampleIntervalHigh;
       return this;
     }
 
     public Builder setThreadMagnitudeMultiplier(double threadMagnitudeMultiplier) {
-      myThreadMagnitudeMultiplier = threadMagnitudeMultiplier;
+      this.threadMagnitudeMultiplier = threadMagnitudeMultiplier;
       return this;
     }
 
     public Builder setThroughputErrorSmoothingFactor(double throughputErrorSmoothingFactor) {
-      myThroughputErrorSmoothingFactor = throughputErrorSmoothingFactor;
+      this.throughputErrorSmoothingFactor = throughputErrorSmoothingFactor;
       return this;
     }
 
     public Builder setGainExponent(double gainExponent) {
-      myGainExponent = gainExponent;
+      this.gainExponent = gainExponent;
       return this;
     }
 
     public Builder setMaxSampleError(double maxSampleError) {
-      myMaxSampleError = maxSampleError;
+      this.maxSampleError = maxSampleError;
       return this;
     }
 
     public HillClimbingOptions build() {
-      return new HillClimbingOptions(myCpuUtilizationThreshold, myMinThreadsCount, myMaxThreadsCount, myWavePeriod, mySamplesToMeasure,
-        myTargetThroughputRatio, myTargetSignalToNoiseRatio, myMaxChangePerSecond, myMaxChangePerSample, myMaxThreadWaveMagnitude,
-        mySampleIntervalLow, mySampleIntervalHigh, myThreadMagnitudeMultiplier, myThroughputErrorSmoothingFactor, myGainExponent,
-        myMaxSampleError);
+      return new HillClimbingOptions(cpuUtilizationThreshold, minThreadsCount, maxThreadsCount, wavePeriod, samplesToMeasure,
+        targetThroughputRatio, targetSignalToNoiseRatio, maxChangePerSecond, maxChangePerSample, maxThreadWaveMagnitude,
+        sampleIntervalLow, sampleIntervalHigh, threadMagnitudeMultiplier, throughputErrorSmoothingFactor, gainExponent,
+        maxSampleError);
     }
   }
 
