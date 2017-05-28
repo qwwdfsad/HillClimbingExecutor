@@ -83,14 +83,14 @@ final class HillClimbing {
   }
 
 
-  void forceChange(int newThreadCount, HillClimbingStateTransition transition) {
+  void forceChange(int newThreadCount, StateTransition transition) {
     if (newThreadCount != m_lastThreadCount) {
       m_currentControlSetting += (newThreadCount - m_lastThreadCount);
       changeThreadsCount(newThreadCount, transition);
     }
   }
 
-  void changeThreadsCount(int newThreadCount, HillClimbingStateTransition transition) {
+  void changeThreadsCount(int newThreadCount, StateTransition transition) {
     m_lastThreadCount = newThreadCount;
     m_currentSampleInterval = m_sampleIntervalLow + m_randomIntervalGenerator.nextInt(m_sampleIntervalHigh + 1);
     // TODO: report here
@@ -104,7 +104,7 @@ final class HillClimbing {
 
     // If someone changed the thread count without telling us, update our records accordingly.
     if (currentThreadCount != m_lastThreadCount)
-      forceChange(currentThreadCount, HillClimbingStateTransition.Initializing);
+      forceChange(currentThreadCount, StateTransition.INITIALIZING);
 
     // Update the cumulative stats for this thread count
     m_elapsedSinceLastChange += sampleDuration;
@@ -160,7 +160,7 @@ final class HillClimbing {
     double throughputErrorEstimate;
     double confidence = 0.0;
 
-    HillClimbingStateTransition transition = HillClimbingStateTransition.Warmup;
+    StateTransition transition = StateTransition.WARMUP;
 
     // How many samples will we use?  It must be at least the three wave periods we're looking for, and it must also be a whole
     // multiple of the primary wave's period; otherwise the frequency we're looking for will fall between two  frequency bands
@@ -216,11 +216,11 @@ final class HillClimbing {
           ratio = throughputWaveComponent
             .minus(threadWaveComponent.multiplyBy(real(m_targetThroughputRatio)))
             .divideBy(threadWaveComponent);
-          transition = HillClimbingStateTransition.ClimbingMove;
+          transition = StateTransition.CLIMBING_MOVE;
         }
         else {
           ratio = Complex.zero();
-          transition = HillClimbingStateTransition.Stabilizing;
+          transition = StateTransition.STABILIZING;
         }
 
         //
@@ -329,16 +329,10 @@ final class HillClimbing {
     return new Complex(q1 - q2 * cosine, q2 * sine).divideBy((double) sampleCount);
   }
 
-  // TODO revisit unused state transitions
-  enum HillClimbingStateTransition {
-    Warmup,
-    Initializing,
-    RandomMove,
-    ClimbingMove,
-    ChangePoint,
-    Stabilizing,
-    Starvation, //used by ThreadpoolMgr
-    ThreadTimedOut, //used by ThreadpoolMgr
-    Undefined,
+  enum StateTransition {
+    WARMUP,
+    INITIALIZING,
+    CLIMBING_MOVE,
+    STABILIZING,
   }
 }

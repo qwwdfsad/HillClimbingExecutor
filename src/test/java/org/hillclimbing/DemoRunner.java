@@ -35,7 +35,7 @@ class DemoRunner {
     int lastSampleTimer = 0;
     int currentThreadCount = 2;
 
-    hc.forceChange(currentThreadCount, HillClimbing.HillClimbingStateTransition.Initializing);
+    hc.forceChange(currentThreadCount, HillClimbing.StateTransition.INITIALIZING);
     for (int mode = 1; mode <= 5; mode++) {
       int currentWorkLoad = getCurrentWorkLoad(mode);
       boolean reportedMsgInWorkload = false;
